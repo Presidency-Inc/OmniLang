@@ -24,7 +24,6 @@ transformations:
       product_id: "$product_id"
       product_name: "$name"
 
-  
 
 outputs:
   # Write the expensive products array to a JSON file, pretty printed
