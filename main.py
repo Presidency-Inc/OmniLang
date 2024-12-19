@@ -35,8 +35,7 @@ file_handler.setFormatter(file_formatter)
 # Console handler (stderr) for warnings and errors
 console_handler = logging.StreamHandler(sys.stderr)
 console_handler.setLevel(logging.WARNING)
-console_formatter = logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(message)s")
+console_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 console_handler.setFormatter(console_formatter)
 
 logger.addHandler(file_handler)
@@ -56,25 +55,21 @@ PLUGIN_FUNCTIONS: Dict[str, Callable] = {}
 # on_function_failure: "error", "warn", "ignore"
 
 #####################################
-# Expression Parser and Evaluator (as before)
+# Expression Parser and Evaluator
 #####################################
 
 TOKEN_PATTERN = re.compile(
     r"[()]|==|!=|>=|<=|[=<>]|[A-Za-z0-9_.$]+|\"[^\"]*\"|'[^']*'|,|\+|\-|\*|/|\band\b|\bor\b|\bnot\b"
 )
 
-
 class ExpressionError(Exception):
     pass
-
 
 def tokenize(expression: str) -> List[str]:
     tokens = TOKEN_PATTERN.findall(expression)
     return [t.strip() for t in tokens if t.strip()]
 
-
 class Parser:
-
     def __init__(self, tokens: List[str]):
         self.tokens = tokens
         self.pos = 0
@@ -123,7 +118,7 @@ class Parser:
         node = self.parse_sum_expr()
         while True:
             p = self.peek()
-            if p in ['==', '!=', '>', '<', '>=', '<=']:
+            if p in ['==','!=','>','<','>=','<=']:
                 op = self.consume()
                 right = self.parse_sum_expr()
                 node = ('op', op, node, right)
@@ -135,7 +130,7 @@ class Parser:
         node = self.parse_term()
         while True:
             p = self.peek()
-            if p in ['+', '-']:
+            if p in ['+','-']:
                 op = self.consume()
                 right = self.parse_term()
                 node = ('op', op, node, right)
@@ -147,7 +142,7 @@ class Parser:
         node = self.parse_factor()
         while True:
             p = self.peek()
-            if p in ['*', '/']:
+            if p in ['*','/']:
                 op = self.consume()
                 right = self.parse_factor()
                 node = ('op', op, node, right)
@@ -174,8 +169,7 @@ class Parser:
             s = self.consume()
             val = s.strip('"').strip("'")
             return ('str', val)
-        elif p.replace('.', '', 1).isdigit() or (p.replace('.', '', 1).replace(
-                '-', '', 1).isdigit()):
+        elif p.replace('.','',1).isdigit() or (p.replace('.','',1).replace('-','',1).isdigit()):
             num_t = self.consume()
             if '.' in num_t:
                 return ('num', float(num_t))
@@ -194,12 +188,11 @@ class Parser:
                 self.consume(')')
                 return ('func', ident, args)
             else:
-                if ident.lower() in ['true', 'false']:
+                if ident.lower() in ['true','false']:
                     return ('bool', ident.lower() == 'true')
                 return ('param', ident)
         else:
             raise ExpressionError(f"Unexpected token {p} in factor.")
-
 
 def parse_expression(expr: str):
     tokens = tokenize(expr)
@@ -209,11 +202,108 @@ def parse_expression(expr: str):
         raise ExpressionError("Extra tokens after valid expression.")
     return node
 
+def try_float(val):
+    if isinstance(val, (int,float)):
+        return val
+    if isinstance(val, str):
+        try:
+            return float(val)
+        except:
+            return None
+    return None
 
-def evaluate_ast(node, row, parameters, macros, column_lookup: Callable[[str],
-                                                                        Any]):
+def safe_compare(left, right):
+    if isinstance(left, (int,float)) and isinstance(right,(int,float)):
+        return (left, right)
+    left_num = try_float(left)
+    right_num = try_float(right)
+    if left_num is not None and right_num is not None:
+        return (left_num, right_num)
+    if isinstance(left, str) and isinstance(right, str):
+        return (left, right)
+    return None
+
+def apply_op(op, left, right):
+    if op == 'not':
+        return not bool(left)
+    if op == '+':
+        if isinstance(left,(int,float)) and isinstance(right,(int,float)):
+            return left+right
+        return str(left)+str(right)
+    elif op == '-':
+        if isinstance(left,(int,float)) and isinstance(right,(int,float)):
+            return left - right
+    elif op == '*':
+        if isinstance(left,(int,float)) and isinstance(right,(int,float)):
+            return left*right
+    elif op == '/':
+        if isinstance(left,(int,float)) and isinstance(right,(int,float)):
+            if right == 0:
+                return None
+            return left/right
+    elif op in ['==','!=','>','<','>=','<=']:
+        pair = safe_compare(left, right)
+        if pair is None:
+            return False
+        left, right = pair
+        if op == '==':
+            return left == right
+        elif op == '!=':
+            return left != right
+        elif op == '>':
+            return left > right
+        elif op == '<':
+            return left < right
+        elif op == '>=':
+            return left >= right
+        elif op == '<=':
+            return left <= right
+    elif op == 'and':
+        return bool(left) and bool(right)
+    elif op == 'or':
+        return bool(left) or bool(right)
+    return None
+
+def apply_function(fname: str, args: List[Any]):
+    fn = fname.lower()
+    if fn == 'if':
+        if len(args) != 3:
+            return None
+        return args[1] if args[0] else args[2]
+    elif fn == 'concat':
+        return "".join(str(a) for a in args)
+    elif fn == 'lowercase':
+        return str(args[0]).lower() if args else None
+    elif fn == 'uppercase':
+        return str(args[0]).upper() if args else None
+    elif fn == 'substring':
+        if len(args)==3 and isinstance(args[1],int) and isinstance(args[2],int):
+            val = str(args[0])
+            return val[args[1]:args[1]+args[2]]
+        return None
+    elif fn == 'match':
+        if len(args)==2 and isinstance(args[0],str):
+            pattern = args[1]
+            return re.match(pattern,args[0]) is not None
+        return False
+    elif fn == 'format_date':
+        if len(args)==2 and isinstance(args[0],str):
+            try:
+                dt = datetime.fromisoformat(args[0])
+                return dt.strftime(args[1])
+            except:
+                return args[0]
+        return args[0] if args else None
+    elif fn == 'percent':
+        if args and isinstance(args[0],(int,float)):
+            return f"{args[0]*100:.2f}%"
+        return None
+    elif fn in PLUGIN_FUNCTIONS:
+        return PLUGIN_FUNCTIONS[fn](*args)
+    return None
+
+def evaluate_ast(node, row, parameters, macros, column_lookup: Callable[[str],Any]):
     ntype = node[0]
-
     if ntype == 'op':
         op = node[1]
         left = evaluate_ast(node[2], row, parameters, macros, column_lookup)
@@ -235,126 +325,13 @@ def evaluate_ast(node, row, parameters, macros, column_lookup: Callable[[str],
         return node[1]
     elif ntype == 'func':
         fname = node[1]
-        args = [
-            evaluate_ast(a, row, parameters, macros, column_lookup)
-            for a in node[2]
-        ]
+        args = [evaluate_ast(a, row, parameters, macros, column_lookup) for a in node[2]]
         return apply_function(fname, args)
     return None
-
-
-def try_float(val):
-    if isinstance(val, (int, float)):
-        return val
-    if isinstance(val, str):
-        try:
-            return float(val)
-        except:
-            return None
-    return None
-
-
-def safe_compare(left, right):
-    if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-        return (left, right)
-    left_num = try_float(left)
-    right_num = try_float(right)
-    if left_num is not None and right_num is not None:
-        return (left_num, right_num)
-    if isinstance(left, str) and isinstance(right, str):
-        return (left, right)
-    return None
-
-
-def apply_op(op, left, right):
-    if op == 'not':
-        return not bool(left)
-
-    if op == '+':
-        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-            return left + right
-        return str(left) + str(right)
-    elif op == '-':
-        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-            return left - right
-    elif op == '*':
-        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-            return left * right
-    elif op == '/':
-        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
-            if right == 0:
-                return None
-            return left / right
-    elif op in ['==', '!=', '>', '<', '>=', '<=']:
-        pair = safe_compare(left, right)
-        if pair is None:
-            # Can't compare
-            return False
-        left, right = pair
-        if op == '==':
-            return left == right
-        elif op == '!=':
-            return left != right
-        elif op == '>':
-            return left > right
-        elif op == '<':
-            return left < right
-        elif op == '>=':
-            return left >= right
-        elif op == '<=':
-            return left <= right
-    elif op == 'and':
-        return bool(left) and bool(right)
-    elif op == 'or':
-        return bool(left) or bool(right)
-
-    return None
-
-
-def apply_function(fname: str, args: List[Any]):
-    fn = fname.lower()
-    if fn == 'if':
-        if len(args) != 3:
-            return None
-        return args[1] if args[0] else args[2]
-    elif fn == 'concat':
-        return "".join(str(a) for a in args)
-    elif fn == 'lowercase':
-        return str(args[0]).lower() if args else None
-    elif fn == 'uppercase':
-        return str(args[0]).upper() if args else None
-    elif fn == 'substring':
-        if len(args) == 3 and isinstance(args[1], int) and isinstance(
-                args[2], int):
-            val = str(args[0])
-            return val[args[1]:args[1] + args[2]]
-        return None
-    elif fn == 'match':
-        if len(args) == 2 and isinstance(args[0], str):
-            pattern = args[1]
-            return re.match(pattern, args[0]) is not None
-        return False
-    elif fn == 'format_date':
-        if len(args) == 2 and isinstance(args[0], str):
-            try:
-                dt = datetime.fromisoformat(args[0])
-                return dt.strftime(args[1])
-            except:
-                return args[0]
-        return args[0] if args else None
-    elif fn == 'percent':
-        if args and isinstance(args[0], (int, float)):
-            return f"{args[0]*100:.2f}%"
-        return None
-    elif fn in PLUGIN_FUNCTIONS:
-        return PLUGIN_FUNCTIONS[fn](*args)
-    return None
-
 
 #####################################
 # Main Processing
 #####################################
-
 
 def process_cson(cson_file_path: str,
                  input_directory: str,
@@ -377,10 +354,23 @@ def process_cson(cson_file_path: str,
     else:
         cson_config["parameters"] = {}
 
-    load_plugins(cson_config.get("plugins", []))
+    # Get project path from config file path
+    project_path = os.path.dirname(os.path.abspath(cson_file_path))
+    load_plugins(cson_config.get("plugins", []), project_path)
 
     data_store = load_inputs(cson_config, input_directory)
-    transformed_data = apply_transformations(cson_config, data_store)
+    # Execute top-level transformations
+    transformed_data = {}
+    parameters = cson_config.get("parameters", {})
+    macros = cson_config.get("macros", {})
+    transformations = cson_config.get("transformations", {})
+
+    # Process each top-level transformation and store results
+    for t_key, t_val in transformations.items():
+        logger.debug(f"Processing top-level transformation {t_key}")
+        val = execute_transformation(t_val, data_store, parameters, macros)
+        transformed_data[t_key] = val
+
     write_outputs(cson_config, transformed_data, output_directory)
     logger.info("CSON processing completed successfully.")
 
@@ -394,42 +384,35 @@ def load_cson_config(path: str) -> Dict[str, Any]:
         logger.error(f"Failed to load CSON file: {e}")
         return {}
 
-
-def validate_cson(cson_config: Dict[str, Any]) -> List[str]:
+def validate_cson(cson_config: Dict[str,Any]) -> List[str]:
     errors = []
     logger.debug("Validating CSON structure.")
-    if "inputs" not in cson_config or not isinstance(cson_config["inputs"],
-                                                     list):
+    if "inputs" not in cson_config or not isinstance(cson_config["inputs"], list):
         errors.append("Missing or invalid 'inputs' section.")
-    if "transformations" not in cson_config or not isinstance(
-            cson_config["transformations"], dict):
+    if "transformations" not in cson_config or not isinstance(cson_config["transformations"], dict):
         errors.append("Missing or invalid 'transformations' section.")
-    if "outputs" not in cson_config or not isinstance(cson_config["outputs"],
-                                                      list):
+    if "outputs" not in cson_config or not isinstance(cson_config["outputs"], list):
         errors.append("Missing or invalid 'outputs' section.")
     return errors
 
-
-def load_plugins(plugin_paths: List[str]):
+def load_plugins(plugin_paths: List[str], project_path: str):
     logger.debug("Loading plugins...")
     for p in plugin_paths:
-        logger.debug(f"Loading plugin {p}")
+        absolute_path = os.path.join(project_path, p.lstrip('./'))
+        logger.debug(f"Loading plugin {absolute_path}")
         try:
-            spec = importlib.util.spec_from_file_location("plugin_module", p)
+            spec = importlib.util.spec_from_file_location("plugin_module", absolute_path)
             plugin_module = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(plugin_module)  # type: ignore
             if hasattr(plugin_module, "register_functions"):
                 plugin_module.register_functions(PLUGIN_FUNCTIONS)
-                logger.debug(f"Plugin {p} loaded successfully.")
+                logger.debug(f"Plugin {absolute_path} loaded successfully.")
         except Exception as e:
-            logger.warning(f"Error loading plugin {p}: {e}")
+            logger.warning(f"Error loading plugin {absolute_path}: {str(e)}")
 
-
-def load_inputs(cson_config: Dict[str, Any],
-                input_directory: str) -> Dict[str, List[Dict[str, Any]]]:
+def load_inputs(cson_config: Dict[str,Any], input_directory: str) -> Dict[str, List[Dict[str,Any]]]:
     logger.info("Loading input CSV files.")
     data_store = {}
-    parameters = cson_config.get("parameters", {})
     error_handling = cson_config.get("error_handling", {})
     inputs = cson_config.get("inputs", [])
     for inp in inputs:
@@ -455,10 +438,7 @@ def load_inputs(cson_config: Dict[str, Any],
                 for row in reader:
                     for rc in required_columns:
                         if rc not in row:
-                            handle_error(
-                                "on_missing_column",
-                                f"Missing required column {rc} in {fpath}",
-                                error_handling)
+                            handle_error("on_missing_column", f"Missing required column {rc} in {fpath}", error_handling)
 
                     if trim_values:
                         for k in row:
@@ -470,21 +450,14 @@ def load_inputs(cson_config: Dict[str, Any],
                             val = row[c]
                             converted = convert_type(val, t)
                             if converted is None and val != '' and val is not None:
-                                handle_error(
-                                    "on_type_mismatch",
-                                    f"Column {c} value '{val}' cannot be converted to {t}",
-                                    error_handling)
+                                handle_error("on_type_mismatch", f"Column {c} value '{val}' cannot be converted to {t}", error_handling)
                             else:
                                 row[c] = converted
 
                     if category_pattern and "category" in row:
                         cat_val = row["category"]
-                        if isinstance(cat_val, str) and not re.match(
-                                category_pattern, cat_val):
-                            handle_error(
-                                "on_pattern_violation",
-                                f"category '{cat_val}' does not match pattern {category_pattern}",
-                                error_handling)
+                        if isinstance(cat_val,str) and not re.match(category_pattern, cat_val):
+                            handle_error("on_pattern_violation", f"category '{cat_val}' does not match pattern {category_pattern}", error_handling)
 
                     for c, fmt in date_formats.items():
                         if c in row and isinstance(row[c], str):
@@ -492,7 +465,6 @@ def load_inputs(cson_config: Dict[str, Any],
                                 dt = datetime.strptime(row[c], fmt)
                                 row[c] = dt.isoformat()
                             except:
-                                # Not raising error here, just leave as string
                                 pass
 
                     rows.append(row)
@@ -500,6 +472,15 @@ def load_inputs(cson_config: Dict[str, Any],
         logger.debug(f"Loaded {len(rows)} rows for {name}.")
     return data_store
 
+def handle_error(mode_key: str, message: str, error_handling: Dict[str,str]):
+    mode = error_handling.get(mode_key, "error")
+    if mode == "error":
+        logger.error(message)
+        sys.exit(1)
+    elif mode == "warn":
+        logger.warning(message)
+    elif mode == "ignore":
+        logger.debug(f"Ignored issue: {message}")
 
 def convert_type(val: Any, t: str) -> Any:
     if val is None or val == '':
@@ -516,120 +497,30 @@ def convert_type(val: Any, t: str) -> Any:
             return None
     elif t == 'bool':
         v = str(val).lower()
-        if v in ['true', '1', 'yes']:
+        if v in ['true','1','yes']:
             return True
-        elif v in ['false', '0', 'no']:
+        elif v in ['false','0','no']:
             return False
         return None
     elif t == 'date':
         return val
     return val
 
-
-def handle_error(mode_key: str, message: str, error_handling: Dict[str, str]):
-    mode = error_handling.get(mode_key, "error")
-    if mode == "error":
-        logger.error(message)
-        sys.exit(1)
-    elif mode == "warn":
-        logger.warning(message)
-    elif mode == "ignore":
-        logger.debug(f"Ignored issue: {message}")
-
-
-def apply_transformations(
-        cson_config: Dict[str, Any],
-        data_store: Dict[str, List[Dict[str, Any]]]) -> Dict[str, Any]:
-    logger.info("Applying transformations.")
-    transformations = cson_config.get("transformations", {})
-    parameters = cson_config.get("parameters", {})
-    macros = cson_config.get("macros", {})
-    result = {}
-    for t_key, t_val in transformations.items():
-        logger.debug(f"Processing transformation {t_key}")
-        if not isinstance(t_val, dict):
-            continue
-
-        ttype = t_val.get("type")
-        if ttype == "object":
-            obj = build_object(t_val, data_store, parameters, macros, result)
-            result[t_key] = obj
-        elif ttype == "array":
-            from_name = t_val.get("from")
-            rows = data_store.get(from_name, [])
-
-            fil_expr = t_val.get("filter")
-            if fil_expr:
-                logger.debug(f"Filtering rows for {t_key}")
-                rows = [
-                    r for r in rows
-                    if evaluate_expression(fil_expr, r, parameters, macros)
-                ]
-
-            cond_expr = t_val.get("condition")
-            if cond_expr and not evaluate_expression(cond_expr, {}, parameters,
-                                                     macros):
-                logger.debug(
-                    f"Condition for {t_key} not met, producing empty array.")
-                result[t_key] = []
-                continue
-
-            if "group_by" in t_val:
-                logger.debug(f"Grouping rows for {t_key}")
-                grouped = group_rows(rows, t_val["group_by"], parameters,
-                                     macros)
-                arr = build_grouped_array(grouped,
-                                          t_val.get("item_structure", {}),
-                                          parameters, macros)
-                result[t_key] = arr
-            else:
-                item_struc = t_val.get("item_structure", {})
-                arr = [
-                    build_item(r, item_struc, parameters, macros) for r in rows
-                ]
-                result[t_key] = arr
-        else:
-            logger.debug(
-                f"Unsupported transformation type: {ttype} for {t_key}")
-    return result
-
-
-def build_object(obj_def: Dict[str, Any], data_store, parameters, macros,
-                 transformed) -> Dict[str, Any]:
-    result = {}
-    for k, v in obj_def.items():
-        if k in [
-                "type", "from", "filter", "group_by", "condition",
-                "item_structure", "fields", "description"
-        ]:
-            continue
-        val = evaluate_expression(v, {}, parameters, macros)
-        result[k] = val
-    fields = obj_def.get("fields", {})
-    for fk, fv in fields.items():
-        result[fk] = evaluate_expression(fv, {}, parameters, macros)
-    return result
-
-
-def evaluate_expression(expr: Any, row: Dict[str, Any],
-                        parameters: Dict[str, Any], macros: Dict[str,
-                                                                 str]) -> Any:
+def evaluate_expression(expr: Any, row: Dict[str,Any], parameters: Dict[str,Any], macros: Dict[str,str]) -> Any:
     if not isinstance(expr, str):
         return expr
     expr = expr.strip()
     if expr.startswith("="):
         expr_val = expand_macros(expr[1:].strip(), macros)
         node = parse_expression(expr_val)
-        return evaluate_ast(node, row, parameters, macros,
-                            lambda c: row.get(c))
+        return evaluate_ast(node, row, parameters, macros, lambda c: row.get(c))
     elif expr.startswith("$"):
         col = expr[1:]
         return row.get(col)
     else:
         return expr
 
-
-def expand_macros(expr: str, macros: Dict[str, str]) -> str:
+def expand_macros(expr: str, macros: Dict[str,str]) -> str:
     for m_name, m_expr in macros.items():
         if expr.startswith(m_name + "("):
             if m_expr.startswith("="):
@@ -638,85 +529,47 @@ def expand_macros(expr: str, macros: Dict[str, str]) -> str:
             return m_expr
     return expr
 
-
-def build_item(row: Dict[str, Any], item_structure: Dict[str, Any], parameters,
-               macros) -> Dict[str, Any]:
-    out_item = {}
-    for field_key, field_val in item_structure.items():
-        if isinstance(field_val, dict):
-            out_item[field_key] = build_item(row, field_val, parameters,
-                                             macros)
+def nested_get(obj: Any, path: str):
+    parts = path.split('.')
+    cur = obj
+    for p in parts:
+        if isinstance(cur, dict):
+            cur = cur.get(p)
         else:
-            val = evaluate_expression(field_val, row, parameters, macros)
-            out_item[field_key] = val
-    return out_item
+            return None
+    return cur
 
+def flatten_value(item: Dict[str,Any], key: str):
+    return item.get(key,"")
 
-def group_rows(rows: List[Dict[str, Any]], group_expr: str, parameters,
-               macros) -> Dict[Any, List[Dict[str, Any]]]:
-    grouped = {}
-    for r in rows:
-        gval = evaluate_expression(group_expr, r, parameters, macros)
-        grouped.setdefault(gval, []).append(r)
-    return grouped
+def run_post_process(steps: List[Dict[str,Any]], file_path: str):
+    for step in steps:
+        stype = step.get("type")
+        if stype == "compress":
+            logger.info(f"Compressing {file_path} (stub)")
+        elif stype == "upload":
+            logger.info(f"Uploading {file_path} (stub)")
+        elif stype == "notify":
+            logger.info(f"Notifying about {file_path} (stub)")
 
-
-def build_grouped_array(grouped: Dict[Any, List[Dict[str, Any]]],
-                        item_structure: Dict[str, Any], parameters,
-                        macros) -> List[Dict[str, Any]]:
-    arr = []
-    for k, group_rows in grouped.items():
-        item = {}
-        for fk, fv in item_structure.items():
-            val = evaluate_aggregation(fv, group_rows, parameters, macros)
-            item[fk] = val
-        arr.append(item)
-    return arr
-
-
-def evaluate_aggregation(expr: Any, rows: List[Dict[str, Any]], parameters,
-                         macros) -> Any:
-    if not isinstance(expr, str):
-        return expr
-    ex = expr.strip()
-    if not ex.startswith("="):
-        return expr
-    ex_content = ex[1:].strip()
-
-    m = re.match(r"(sum|min|max|avg|count|count_unique)\(([^)]+)\)",
-                 ex_content)
-    if m:
-        func = m.group(1)
-        col = m.group(2).strip()
-        values = []
-        for r in rows:
-            val = r.get(col)
-            if val is not None:
-                values.append(val)
-        if func == "sum":
-            numeric_vals = [v for v in values if isinstance(v, (int, float))]
-            return sum(numeric_vals) if numeric_vals else 0
-        elif func == "min":
-            numeric_vals = [v for v in values if isinstance(v, (int, float))]
-            return min(numeric_vals) if numeric_vals else None
-        elif func == "max":
-            numeric_vals = [v for v in values if isinstance(v, (int, float))]
-            return max(numeric_vals) if numeric_vals else None
-        elif func == "avg":
-            numeric_vals = [v for v in values if isinstance(v, (int, float))]
-            return (sum(numeric_vals) /
-                    len(numeric_vals)) if numeric_vals else None
-        elif func == "count":
-            return len(values)
-        elif func == "count_unique":
-            return len(set(values))
+def write_output_file(fmt: str, path: str, data: Any, out_conf: Dict[str,Any]):
+    if fmt == "json":
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2 if out_conf.get("pretty") else None)
+    elif fmt == "csv":
+        if not isinstance(data, list):
+            data = []
+        cols = out_conf.get("columns", [])
+        with open(path, 'w', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=cols)
+            writer.writeheader()
+            for row in data:
+                writer.writerow({c: flatten_value(row, c) for c in cols})
     else:
-        node = parse_expression(ex_content)
-        return evaluate_ast(node, {}, parameters, macros, lambda c: None)
+        logger.error(f"Unsupported output format: {fmt}")
+        sys.exit(1)
 
-
-def write_outputs(cson_config: Dict[str, Any],
-                  transformed_data: Dict[str, Any], output_directory: str):
+def write_outputs(cson_config: Dict[str, Any], transformed_data: Dict[str, Any], output_directory: str):
     logger.info("Writing outputs.")
     outputs = cson_config.get("outputs", [])
     if not os.path.exists(output_directory):
@@ -740,8 +593,7 @@ def write_outputs(cson_config: Dict[str, Any],
                 grouped.setdefault(val, []).append(item)
             pattern = out_conf.get("split_file_pattern", "output_{value}.json")
             for gv, glist in grouped.items():
-                out_path = os.path.join(output_directory,
-                                        pattern.replace("{value}", str(gv)))
+                out_path = os.path.join(output_directory, pattern.replace("{value}", str(gv)))
                 logger.debug(f"Writing split output {out_path}")
                 write_output_file(fmt, out_path, glist, out_conf)
                 run_post_process(out_conf.get("post_process", []), out_path)
@@ -751,59 +603,261 @@ def write_outputs(cson_config: Dict[str, Any],
             write_output_file(fmt, out_path, data_to_write, out_conf)
             run_post_process(out_conf.get("post_process", []), out_path)
 
+#############################
+# New Utility: execute_transformation
+#############################
+def execute_transformation(trans_def: Dict[str, Any],
+                           data_store: Dict[str, List[Dict[str,Any]]],
+                           parameters: Dict[str,Any],
+                           macros: Dict[str,str]) -> Any:
+    ttype = trans_def.get("type")
 
-def write_output_file(fmt: str, path: str, data: Any, out_conf: Dict[str,
-                                                                     Any]):
-    if fmt == "json":
-        with open(path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2 if out_conf.get("pretty") else None)
-    elif fmt == "csv":
-        if not isinstance(data, list):
-            data = []
-        cols = out_conf.get("columns", [])
-        with open(path, 'w', newline='', encoding='utf-8') as f:
-            writer = csv.DictWriter(f, fieldnames=cols)
-            writer.writeheader()
-            for row in data:
-                writer.writerow({c: flatten_value(row, c) for c in cols})
+    if ttype == "object":
+        return execute_object_transformation(trans_def, data_store, parameters, macros)
+    elif ttype == "array":
+        return execute_array_transformation(trans_def, data_store, parameters, macros)
     else:
-        logger.error(f"Unsupported output format: {fmt}")
-        sys.exit(1)
+        # If no type, treat as a literal expression
+        return evaluate_expression(trans_def, {}, parameters, macros)
 
+def execute_object_transformation(obj_def: Dict[str,Any],
+                                  data_store: Dict[str,List[Dict[str,Any]]],
+                                  parameters: Dict[str,Any],
+                                  macros: Dict[str,str]) -> Dict[str,Any]:
+    result = {}
+    fields = obj_def.get("fields", {})
+    reserved_keys = ["type","from","filter","group_by","condition","item_structure","fields","description"]
+    for k,v in obj_def.items():
+        if k in reserved_keys:
+            continue
+        if isinstance(v, dict) and "type" in v:
+            val = execute_transformation(v, data_store, parameters, macros)
+        else:
+            val = evaluate_expression(v, {}, parameters, macros)
+        result[k] = val
 
-def flatten_value(item: Dict[str, Any], key: str):
-    return item.get(key, "")
+    for fk, fv in fields.items():
+        if isinstance(fv, dict) and "type" in fv:
+            val = execute_transformation(fv, data_store, parameters, macros)
+        else:
+            val = evaluate_expression(fv, {}, parameters, macros)
+        result[fk] = val
 
+    return result
 
-def run_post_process(steps: List[Dict[str, Any]], file_path: str):
-    for step in steps:
-        stype = step.get("type")
-        if stype == "compress":
-            logger.info(f"Compressing {file_path} (stub)")
-        elif stype == "upload":
-            logger.info(f"Uploading {file_path} (stub)")
-        elif stype == "notify":
-            logger.info(f"Notifying about {file_path} (stub)")
+def execute_array_transformation(arr_def: Dict[str,Any],
+                                 data_store: Dict[str,List[Dict[str,Any]]],
+                                 parameters: Dict[str,Any],
+                                 macros: Dict[str,str]) -> List[Any]:
+    from_name = arr_def.get("from")
+    if not from_name or from_name not in data_store:
+        return []
+    rows = data_store[from_name]
 
+    fil_expr = arr_def.get("filter")
+    if fil_expr:
+        rows = [r for r in rows if evaluate_expression(fil_expr, r, parameters, macros)]
 
-def nested_get(obj: Any, path: str):
-    parts = path.split('.')
-    cur = obj
-    for p in parts:
-        if isinstance(cur, dict):
-            cur = cur.get(p)
+    cond_expr = arr_def.get("condition")
+    if cond_expr and not evaluate_expression(cond_expr, {}, parameters, macros):
+        return []
+
+    if "group_by" in arr_def:
+        grouped = group_rows(rows, arr_def["group_by"], parameters, macros)
+        item_struc = arr_def.get("item_structure", {})
+        arr = []
+        for k, group_list in grouped.items():
+            item = {}
+            for fk, fv in item_struc.items():
+                val = evaluate_aggregation(fv, group_list, parameters, macros)
+                item[fk] = val
+            arr.append(item)
+        return arr
+    else:
+        item_struc = arr_def.get("item_structure", {})
+        arr = [build_item(r, item_struc, parameters, macros) for r in rows]
+        return arr
+
+def build_item(row: Dict[str,Any], item_structure: Dict[str,Any], parameters, macros) -> Dict[str,Any]:
+    out_item = {}
+    for field_key, field_val in item_structure.items():
+        if isinstance(field_val, dict) and "type" in field_val:
+            out_item[field_key] = execute_transformation(field_val, {}, parameters, macros)
+        elif isinstance(field_val, dict):
+            out_item[field_key] = build_item(row, field_val, parameters, macros)
+        else:
+            val = evaluate_expression(field_val, row, parameters, macros)
+            out_item[field_key] = val
+    return out_item
+
+def group_rows(rows: List[Dict[str,Any]], group_expr: str, parameters, macros) -> Dict[Any,List[Dict[str,Any]]]:
+    grouped = {}
+    for r in rows:
+        gval = evaluate_expression(group_expr, r, parameters, macros)
+        grouped.setdefault(gval, []).append(r)
+    return grouped
+
+def evaluate_aggregation(expr: Any, rows: List[Dict[str,Any]], parameters, macros) -> Any:
+    if not isinstance(expr, str):
+        return expr
+    ex = expr.strip()
+    # If not aggregator expression start
+    # If starts with '=' or has '$', we consider it an expression needing evaluation
+    # If aggregator pattern match:
+    if not ex.startswith("="):
+        # Not starting with '=' means literal or `$` reference
+        if '$' in ex:
+            # Treat as if expression
+            # Add '=' to start for evaluation
+            ex_content = ex
+            if rows:
+                first_row = rows[0]
+                node = parse_expression(ex_content)
+                return evaluate_ast(node, first_row, parameters, macros, lambda c: first_row.get(c))
+            else:
+                return None
+        else:
+            # Just a literal
+            return expr
+
+    # If we got here, ex starts with '='
+    ex_content = ex[1:].strip()
+
+    m = re.match(r"(sum|min|max|avg|count|count_unique)\(([^)]+)\)", ex_content)
+    if m:
+        func = m.group(1)
+        col = m.group(2).strip()
+        values = [r.get(col) for r in rows if r.get(col) is not None]
+        if func == "sum":
+            numeric_vals = [v for v in values if isinstance(v,(int,float))]
+            return sum(numeric_vals) if numeric_vals else 0
+        elif func == "min":
+            numeric_vals = [v for v in values if isinstance(v,(int,float))]
+            return min(numeric_vals) if numeric_vals else None
+        elif func == "max":
+            numeric_vals = [v for v in values if isinstance(v,(int,float))]
+            return max(numeric_vals) if numeric_vals else None
+        elif func == "avg":
+            numeric_vals = [v for v in values if isinstance(v,(int,float))]
+            return (sum(numeric_vals)/len(numeric_vals)) if numeric_vals else None
+        elif func == "count":
+            return len(values)
+        elif func == "count_unique":
+            return len(set(values))
+    else:
+        # Normal expression with '=' prefix
+        if rows:
+            first_row = rows[0]
+            node = parse_expression(ex_content)
+            return evaluate_ast(node, first_row, parameters, macros, lambda c: first_row.get(c))
         else:
             return None
-    return cur
-
 
 if __name__ == "__main__":
-    # Example usage
-    process_cson(cson_file_path="cson_config.yaml",
-                 input_directory="./input_data",
-                 output_directory="./output_data",
-                 parameters={
-                     "ENVIRONMENT": "prod",
-                     "INCLUDE_PRICING": True,
-                     "DATE_CUTOFF": "2022-01-01"
-                 })
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='CSON Project Processor')
+    parser.add_argument('--project', help='Name of the project to process')
+    parser.add_argument('--list-projects', action='store_true', help='List all available projects')
+    parser.add_argument('--projects-root', default='projects', help='Root directory containing all projects')
+    
+    args = parser.parse_args()
+    
+    def list_projects(projects_root: str = "projects") -> List[str]:
+        if not os.path.exists(projects_root):
+            return []
+        return [d for d in os.listdir(projects_root) if os.path.isdir(os.path.join(projects_root, d))]
+
+    def setup_project_logging(project_path: str) -> logging.Logger:
+        abs_project_path = os.path.abspath(project_path)
+        log_dir = os.path.join(abs_project_path, "logs")
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        project_name = os.path.basename(abs_project_path)
+        log_filename = f"{project_name}_{timestamp}.log"
+        log_path = os.path.join(log_dir, log_filename)
+
+        with open(log_path, 'w') as f:
+            f.write('')
+        logger = logging.getLogger(f"CSON_{project_name}")
+        logger.setLevel(logging.DEBUG)
+        logger.handlers = []
+
+        file_handler = logging.FileHandler(
+            filename=log_path,
+            encoding='utf-8',
+            mode='w'
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        file_handler.setFormatter(file_formatter)
+
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(logging.WARNING)
+        console_formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+        console_handler.setFormatter(console_formatter)
+
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+        
+        logger.info(f"Log file created: {log_filename}")
+        return logger
+
+    def process_project(project_path: str, parameters: Dict[str, Any] = None):
+        abs_project_path = os.path.abspath(project_path)
+        project_name = os.path.basename(abs_project_path)
+        input_dir = os.path.join(abs_project_path, "input_data")
+        output_dir = os.path.join(abs_project_path, "output_data")
+        config_file = os.path.join(abs_project_path, "transformations.yaml")
+
+        os.makedirs(input_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
+        
+        global logger
+        logger = setup_project_logging(abs_project_path)  
+        if not os.path.exists(config_file):
+            logger.error(f"Config file not found: {config_file}")
+            return False
+
+        try:
+            process_cson(
+                cson_file_path=config_file,
+                input_directory=input_dir,
+                output_directory=output_dir,
+                parameters=parameters
+            )
+            logger.info(f"Successfully processed project: {project_name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error processing project {project_name}: {str(e)}")
+            return False
+
+    if args.list_projects:
+        projects = list_projects(args.projects_root)
+        if projects:
+            print("Available projects:")
+            for proj in projects:
+                print(f"  - {proj}")
+        else:
+            print("No projects found.")
+        sys.exit(0)
+    
+    if not args.project:
+        print("Error: Please specify a project name with --project")
+        sys.exit(1)
+    
+    project_path = os.path.join(args.projects_root, args.project)
+    if not os.path.exists(project_path):
+        print(f"Error: Project '{args.project}' not found")
+        sys.exit(1)
+    
+    parameters = {
+        "ENVIRONMENT": "prod",
+        "INCLUDE_PRICING": True,
+        "DATE_CUTOFF": "2022-01-01"
+        # Add CATEGORY_FILTER if needed, e.g. "CATEGORY_FILTER": "electronics"
+    }
+    
+    success = process_project(project_path, parameters)
+    sys.exit(0 if success else 1)

@@ -1,0 +1,5 @@
+product_id,base_price,discount,currency
+1,100,0.1,USD
+2,25,0.2,USD
+4,500,0.05,EUR
+5,80,0.15,USD

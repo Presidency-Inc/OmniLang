@@ -1,4 +1,4 @@
-dsl_version: "2.0"
+omnilang_version: "1.0"
 description: "A comprehensive CSON configuration showcasing most functionalities."
 
 # External parameters that can be passed from environment or CLI

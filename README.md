@@ -357,6 +357,15 @@ error_handling:
 This example demonstrates how all these features fit together into one powerful and flexible configuration.
 
 ---
+## List all projects
+python main.py --list-projects
+
+### Process specific project
+python main.py --project project1
+
+### Process project in custom projects directory
+python main.py --project project1 --projects-root /path/to/projects
+
 
 ## Conclusion
 

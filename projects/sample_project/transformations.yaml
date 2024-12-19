@@ -1,3 +1,6 @@
+omnilang_version: "1.0"
+description: "A comprehensive CSV to JSON transformation language"
+
 inputs:
   - name: "products"
     file_pattern: "products_*.csv"

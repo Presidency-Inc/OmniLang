@@ -1,0 +1,195 @@
+omnilang_version: "1.0"
+description: "A comprehensive CSV to JSON transformation language"
+
+parameters:
+  environment: "$ENVIRONMENT"        # e.g., 'dev', 'staging', 'prod'
+  include_pricing: "$INCLUDE_PRICING" # true/false to include pricing data
+  date_cutoff: "$DATE_CUTOFF"         # filter out products released before this date
+  category_filter: "$CATEGORY_FILTER" # optional category filter (e.g., 'electronics')
+
+plugins:
+  - "./plugins/custom_functions.py"   # Adds format_color() function
+
+macros:
+  compute_area: "= $width * $height"
+  is_recent: "= $release_date >= date_cutoff"
+  large_item: "=if($width * $height > 50, true, false)"
+
+inputs:
+  - name: "products"
+    file_pattern: "product_data_*.csv"
+    columns: ["product_id", "width", "height", "color", "category", "release_date"]
+    column_types:
+      product_id: int
+      width: int
+      height: int
+      color: str
+      category: str
+      release_date: date
+    date_formats:
+      release_date: "%Y-%m-%d"
+    trim_values: true
+    validate:
+      required_columns: ["product_id", "width", "height", "category"]
+      width_min: 1
+      height_min: 1
+      # Category should match this pattern
+      category_pattern: "^[A-Za-z0-9_-]+$"
+
+  - name: "inventory"
+    file_pattern: "inventory_data.csv"
+    columns: ["product_id", "stock", "warehouse_location"]
+    column_types:
+      product_id: int
+      stock: int
+      warehouse_location: str
+    trim_values: true
+    validate:
+      required_columns: ["product_id", "stock"]
+      stock_min: 0
+
+  - name: "pricing"
+    file_pattern: "pricing_data.csv"
+    columns: ["product_id", "base_price", "discount", "currency"]
+    column_types:
+      product_id: int
+      base_price: float
+      discount: float
+      currency: str
+    validate:
+      required_columns: ["product_id", "base_price"]
+      base_price_min: 0.0
+      discount_range: [0.0, 1.0]
+
+transformations:
+
+  metadata:
+    description: "Global metadata about this dataset"
+    type: object
+    fields:
+      source_system: "Warehouse System"
+      generated_at: "=now()"
+      environment: "= $environment"
+      formatted_date: "=format_date(now(), '%Y/%m/%d %H:%M:%S')"
+
+  # Enriched products:
+  # - Join inventory and optionally pricing.
+  # - Filter by positive dimensions, recent date, and category pattern already validated.
+  # - Optional category_filter parameter: if set, only include that category.
+  products:
+    description: "Enriched product data"
+    type: array
+    from: "products"
+    filter: "= $width > 0 and $height > 0 and is_recent and (if($category_filter, $category == category_filter, true))"
+    item_structure:
+      productId: "$product_id"
+      dimensions:
+        width: "$width"
+        height: "$height"
+        area: "=compute_area()"
+      attributes:
+        color: "=format_color($color)"       # Using plugin function
+        category: "$category"
+        description: "=concat('Product ', $product_id, ': ', $width, 'x', $height, ' in ', $color)"
+        largeItemFlag: "=large_item"
+      inventory:
+        match_from: "inventory"
+        match_by: "product_id"
+        stock: "$stock"
+        warehouse_location: "$warehouse_location"
+        status: "=if($stock > 0, 'In Stock', 'Out of Stock')"
+      pricing:
+        condition: "= $include_pricing == true"
+        match_from: "pricing"
+        match_by: "product_id"
+        basePrice: "$base_price"
+        discount: "$discount"
+        currency: "$currency"
+        finalPrice: "= $base_price * (1 - $discount)"
+        discountPercent: "=percent($discount)" 
+
+  # Inventory summary aggregated by warehouse
+  inventory_summary:
+    description: "Summarized inventory by warehouse"
+    type: object
+    warehouses:
+      type: array
+      from: "inventory"
+      group_by: "$warehouse_location"
+      item_structure:
+        warehouse: "$warehouse_location"
+        totalStock: "=sum(stock)"
+        minStock: "=min(stock)"
+        maxStock: "=max(stock)"
+        avgStock: "=avg(stock)"
+    total_stock_all_warehouses: "=sum(inventory.stock)"
+    warehouse_count: "=count_unique(inventory.warehouse_location)"
+
+  # Partner feed:
+  # Only electronics category and recent products
+  partner_feed:
+    description: "Partner feed for electronics category"
+    type: array
+    from: "products"
+    filter: "=$category == 'electronics' and is_recent"
+    item_structure:
+      id: "$product_id"
+      color: "=lowercase($color)"
+      area: "=compute_area()"
+      releaseDateFormatted: "=format_date($release_date, '%d-%m-%Y')"
+
+  # A simple product list for CSV export (no filter)
+  product_list:
+    description: "Basic product list for CSV output"
+    type: array
+    from: "products"
+    item_structure:
+      productId: "$product_id"
+      category: "$category"
+      area: "=compute_area()"
+
+outputs:
+
+  - name: "enriched_products_output"
+    description: "Full enriched product data"
+    root: "products"
+    format: "json"
+    file: "enriched_products.json"
+    pretty: true
+    post_process:
+      - type: "compress"
+        format: "gzip"
+
+  - name: "inventory_summary_output"
+    description: "Aggregate warehouse inventory summary"
+    root: "inventory_summary"
+    format: "json"
+    file: "inventory_summary.json"
+    pretty: true
+
+  - name: "partner_feed_output"
+    description: "Partner feed split by color"
+    root: "partner_feed"
+    format: "json"
+    split_by: "partner_feed.color"
+    split_file_pattern: "partner_feed_{value}.json"
+    pretty: false
+    post_process:
+      - type: "notify"
+        message: "Partner feeds generated"
+        method: "webhook"
+        url: "https://partner.example.com/notify"
+
+  - name: "product_list_csv"
+    description: "Basic product list as CSV"
+    root: "product_list"
+    format: "csv"
+    file: "product_list.csv"
+    columns: ["productId", "category", "area"]
+    pretty: false
+
+error_handling:
+  on_missing_column: "error"
+  on_type_mismatch: "warn"
+  on_pattern_violation: "error"
+  on_function_failure: "warn"

@@ -1,0 +1,27 @@
+{
+  "warehouses": [
+    {
+      "warehouse": "WH_A",
+      "totalStock": 150,
+      "minStock": 50,
+      "maxStock": 100,
+      "avgStock": 75.0
+    },
+    {
+      "warehouse": "WH_B",
+      "totalStock": 5,
+      "minStock": 0,
+      "maxStock": 5,
+      "avgStock": 2.5
+    },
+    {
+      "warehouse": "WH_C",
+      "totalStock": 10,
+      "minStock": 10,
+      "maxStock": 10,
+      "avgStock": 10.0
+    }
+  ],
+  "total_stock_all_warehouses": null,
+  "warehouse_count": null
+}

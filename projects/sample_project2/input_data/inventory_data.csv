@@ -1,0 +1,6 @@
+product_id,stock,warehouse_location
+1,100,WH_A
+2,0,WH_B
+4,50,WH_A
+5,10,WH_C
+6,5,WH_B
