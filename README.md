@@ -1,4 +1,4 @@
-# CSON: CSV-to-JSON Transformation DSL
+# OmniLang CSON: CSV-to-JSON Transformation DSL
 
 **CSON** (CSV-Structured Object Notation) is a declarative, YAML-based DSL (Domain-Specific Language) designed to transform one or more CSV files into structured JSON outputs. It gives you the power to:
 
