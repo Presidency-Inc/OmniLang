@@ -1,0 +1,3 @@
+"yaml.schemas": {
+  "./core/cson-schema.json": "/*.cson.yaml"
+}

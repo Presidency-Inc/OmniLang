@@ -1,0 +1,204 @@
+dsl_version: "2.0"
+description: "A comprehensive CSON configuration showcasing most functionalities."
+
+# External parameters that can be passed from environment or CLI
+parameters:
+  environment: "$ENVIRONMENT"          # e.g. 'dev', 'staging', 'prod'
+  include_pricing: "$INCLUDE_PRICING"  # bool: true/false to include pricing details
+  date_cutoff: "$DATE_CUTOFF"          # e.g. '2021-01-01', filter out old products
+  category_filter: "$CATEGORY_FILTER"  # e.g. 'electronics', filter categories
+
+# Plugins to add extra functions or logic
+plugins:
+  - "./plugins/custom_functions.py" # Assume this provides format_date(), percent(), etc.
+  - "./plugins/string_ops.py"       # Hypothetical plugin with replace(), substring(), etc.
+
+# Macros for reusable expressions
+macros:
+  compute_area: "= $width * $height"
+  normalize_color: "=lowercase($color)"
+  final_price: "= $base_price * (1 - $discount)"
+  is_recent: "= $release_date >= date_cutoff"
+  large_item: "=if($width * $height > 50, true, false)"
+  valid_category: "=match($category, '^[A-Za-z0-9_-]+$')"
+  description_text: "=concat('Product ', $product_id, ': ', $width, 'x', $height, ' in ', $color)"
+
+inputs:
+  - name: "products"
+    file_pattern: "product_data_*.csv"
+    columns: ["product_id", "width", "height", "color", "category", "release_date"]
+    column_types:
+      product_id: int
+      width: int
+      height: int
+      color: str
+      category: str
+      release_date: date
+    date_formats:
+      release_date: "%Y-%m-%d"
+    trim_values: true
+    validate:
+      required_columns: ["product_id", "width", "height", "category"]
+      width_min: 1
+      height_min: 1
+      category_pattern: "^[A-Za-z0-9_-]+$"
+
+  - name: "inventory"
+    file_pattern: "inventory_data_*.csv"
+    columns: ["product_id", "stock", "warehouse_location"]
+    column_types:
+      product_id: int
+      stock: int
+      warehouse_location: str
+    trim_values: true
+    validate:
+      required_columns: ["product_id", "stock"]
+      stock_min: 0
+
+  - name: "pricing"
+    file_pattern: "pricing_data_*.csv"
+    columns: ["product_id", "base_price", "discount", "currency"]
+    column_types:
+      product_id: int
+      base_price: float
+      discount: float
+      currency: str
+    validate:
+      required_columns: ["product_id", "base_price"]
+      base_price_min: 0.0
+      discount_range: [0.0, 1.0]
+
+transformations:
+  metadata:
+    description: "Global metadata"
+    type: object
+    fields:
+      source_system: "Warehouse System"
+      generated_at: "=now()"
+      environment: "= $environment"
+      formatted_date: "=format_date(now(), '%Y/%m/%d %H:%M:%S')"
+
+  # Create an enriched products array with inventory and optional pricing
+  products:
+    description: "Enriched product data"
+    type: array
+    from: "products"
+    # Filter: products must be recent, match category pattern, and optionally a category filter if provided
+    filter: "= $width > 0 and $height > 0 and is_recent and valid_category and (if($category_filter, $category == category_filter, true))"
+    item_structure:
+      productId: "$product_id"
+      dimensions:
+        width: "$width"
+        height: "$height"
+        area: "=compute_area()"
+      attributes:
+        color: "=normalize_color()"
+        category: "$category"
+        description: "=description_text()"
+        largeItemFlag: "=large_item"
+
+      inventory:
+        match_from: "inventory"
+        match_by: "product_id"
+        stock: "$stock"
+        warehouse_location: "$warehouse_location"
+        status: "=if($stock > 0, 'In Stock', 'Out of Stock')"
+
+      # Conditionally include pricing if include_pricing == true
+      pricing:
+        condition: "= $include_pricing == true"
+        match_from: "pricing"
+        match_by: "product_id"
+        basePrice: "$base_price"
+        discount: "$discount"
+        currency: "$currency"
+        finalPrice: "=final_price()"
+        discountPercent: "=percent($discount)"
+
+  # Summarize inventory data
+  inventory_summary:
+    description: "Aggregate warehouse inventory"
+    type: object
+    warehouses:
+      type: array
+      from: "inventory"
+      group_by: "$warehouse_location"
+      item_structure:
+        warehouse: "$warehouse_location"
+        totalStock: "=sum(stock)"
+        minStock: "=min(stock)"
+        maxStock: "=max(stock)"
+        avgStock: "=avg(stock)"
+    total_stock_all_warehouses: "=sum(inventory.stock)"
+    warehouse_count: "=count_unique(inventory.warehouse_location)"
+
+  # Partner feed: filtered by electronics and recent products, simpler structure
+  partner_feed:
+    description: "Partner-specific feed"
+    type: array
+    from: "products"
+    filter: "=$category == 'electronics' and is_recent"
+    item_structure:
+      id: "$product_id"
+      color: "=normalize_color()"
+      area: "=compute_area()"
+      releaseDateFormatted: "=format_date($release_date, '%d-%m-%Y')"
+      # Example of using a string manipulation from plugin (if available)
+      shortName: "=substring($name, 0, 6)"
+
+  # Create a simple product list for CSV output (no filter)
+  product_list:
+    description: "Simple product list for CSV output"
+    type: array
+    from: "products"
+    item_structure:
+      productId: "$product_id"
+      category: "$category"
+      area: "=compute_area()"
+
+outputs:
+  - name: "enriched_products_output"
+    description: "Full enriched product data with optional pricing"
+    root: "products"
+    format: "json"
+    file: "enriched_products.json"
+    pretty: true
+    post_process:
+      - type: "compress"
+        format: "gzip"
+      - type: "upload"
+        destination: "s3://my-bucket/enriched_products.json.gz"
+
+  - name: "inventory_summary_output"
+    description: "Aggregate warehouse inventory summary"
+    root: "inventory_summary"
+    format: "json"
+    file: "inventory_summary.json"
+    pretty: true
+
+  - name: "partner_feed_output"
+    description: "Partner feed split by color"
+    root: "partner_feed"
+    format: "json"
+    split_by: "partner_feed.color"
+    split_file_pattern: "partner_feed_{value}.json"
+    pretty: false
+    post_process:
+      - type: "notify"
+        message: "Partner feeds generated"
+        method: "webhook"
+        url: "https://partner.example.com/notify"
+
+  - name: "product_list_csv"
+    description: "Basic product list as CSV"
+    root: "product_list"
+    format: "csv"
+    file: "product_list.csv"
+    columns: ["productId", "category", "area"]
+    pretty: false
+
+error_handling:
+  on_missing_column: "error"
+  on_type_mismatch: "warn"
+  on_pattern_violation: "error"
+  on_function_failure: "error"

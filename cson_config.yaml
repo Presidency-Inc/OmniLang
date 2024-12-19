@@ -1,0 +1,38 @@
+inputs:
+  - name: "products"
+    file_pattern: "products_*.csv"
+
+transformations:
+  # Transform the products input into a filtered array of products that are "expensive" (price > 20)
+  expensive_products:
+    type: array
+    from: "products"
+    # filter out products with price <= 20
+    filter: "= $price > 20"
+    item_structure:
+      id: "$product_id"
+      price: "$price"
+      name: "$name"
+
+  # Transform the products input into a simpler list of product IDs and names, no filter
+  # This tests that we can have multiple transformations from the same input
+  product_list:
+    type: array
+    from: "products"
+    # no filter
+    item_structure:
+      product_id: "$product_id"
+      product_name: "$name"
+
+outputs:
+  # Write the expensive products array to a JSON file, pretty printed
+  - root: "expensive_products"
+    format: "json"
+    file: "expensive_products.json"
+    pretty: true
+
+  # Write the full product list to another JSON file
+  - root: "product_list"
+    format: "json"
+    file: "all_products.json"
+    pretty: false

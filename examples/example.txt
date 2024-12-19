@@ -1,0 +1,33 @@
+Explanation of Included Functionalities
+DSL Version & Description: Declared at the top.
+Parameters: environment, include_pricing, date_cutoff, category_filter can influence logic at runtime.
+Plugins: Two fictional plugins are listed, hypothetically providing functions.
+Macros: Several macros defined to reuse expressions (compute_area, normalize_color, final_price, etc.).
+Inputs: Three inputs (products, inventory, pricing) each with columns, types, validation rules, date formats, and trimming.
+Validations: Checks required columns, minimum widths/heights, pattern for category, etc.
+Transformations:
+metadata: An object transformation adding global info.
+products: Array from products input, filtering by multiple conditions, joining inventory and conditionally pricing.
+inventory_summary: An object with aggregated inventory data grouped by warehouse_location.
+partner_feed: Array from products, filtered by category and date, formatted date, and substring.
+product_list: Simple array for CSV export.
+Expressions:
+Filters: filter: "= $width > 0 and ..."
+Conditionals: condition: "= $include_pricing == true"
+Aggregations: sum(), min(), max(), avg(), count_unique()
+String ops: concat(), lowercase(), substring()
+Format date: format_date()
+Regex match: match($category, '^[A-Za-z0-9_-]+$')
+Outputs:
+One output for full enriched products (JSON, pretty, post-process compress and upload).
+One for inventory summary (JSON, pretty).
+One for partner feed split by color into multiple JSON files, with a notify webhook.
+One for product list as CSV.
+Error Handling: Defines how to handle missing columns, type mismatches, pattern violations, and function failures.
+This .cson.yaml example tries to use every discussed feature, providing a template that can be adapted. It’s a comprehensive demonstration, but actual implementation details (especially for plugins and expression parsing) depend on the tooling built around CSON.
+
+
+
+
+
+

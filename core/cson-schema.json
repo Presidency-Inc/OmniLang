@@ -1,0 +1,265 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CSON Schema",
+  "description": "Schema for CSON (CSV-to-JSON DSL) configuration files.",
+  "type": "object",
+  "properties": {
+    "dsl_version": {
+      "type": "string",
+      "description": "Version of the DSL specification."
+    },
+    "description": {
+      "type": "string",
+      "description": "A human-readable description of this CSON configuration."
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Parameters passed in from external environment.",
+      "additionalProperties": {
+        "type": ["string", "number", "boolean"]
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "description": "List of plugins to extend the DSL functionality.",
+      "items": {
+        "type": "string",
+        "description": "Path or identifier for a plugin."
+      }
+    },
+    "macros": {
+      "type": "object",
+      "description": "Reusable expressions defined as macros.",
+      "additionalProperties": {
+        "type": "string",
+        "description": "An expression that can be reused in transformations, e.g. '= $width * $height'."
+      }
+    },
+    "inputs": {
+      "type": "array",
+      "description": "List of input definitions, each describing how to load and validate CSV files.",
+      "items": {
+        "type": "object",
+        "required": ["name", "file_pattern"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A unique identifier for this input source."
+          },
+          "file_pattern": {
+            "type": "string",
+            "description": "A file glob pattern to match CSV files."
+          },
+          "columns": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of expected columns in the CSV."
+          },
+          "column_types": {
+            "type": "object",
+            "description": "Mapping of column names to their expected data type.",
+            "additionalProperties": {
+              "type": "string",
+              "enum": ["int", "float", "str", "bool", "date"]
+            }
+          },
+          "date_formats": {
+            "type": "object",
+            "description": "Specify date formats for date columns.",
+            "additionalProperties": {
+              "type": "string",
+              "description": "A strftime-compatible date format."
+            }
+          },
+          "trim_values": {
+            "type": "boolean",
+            "description": "If true, trim whitespace from all values."
+          },
+          "validate": {
+            "type": "object",
+            "description": "Validation rules for the input.",
+            "properties": {
+              "required_columns": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "width_min": { "type": "number" },
+              "height_min": { "type": "number" },
+              "base_price_min": { "type": "number" },
+              "stock_min": { "type": "number" },
+              "discount_range": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "category_pattern": {
+                "type": "string",
+                "description": "A regex pattern that the category column must match."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "transformations": {
+      "type": "object",
+      "description": "Defines how to transform inputs into structured JSON.",
+      "patternProperties": {
+        "^[A-Za-z0-9_-]+$": {
+          "description": "A transformation key. Typically represents a top-level JSON field.",
+          "type": "object",
+          "properties": {
+            "description": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "enum": ["array", "object"]
+            },
+            "from": {
+              "type": "string",
+              "description": "Specifies which input source or previously transformed array to read from."
+            },
+            "filter": {
+              "type": "string",
+              "description": "A filter expression. E.g. '= $price > 20'"
+            },
+            "condition": {
+              "type": "string",
+              "description": "Condition for including this field/block. E.g. '= $include_pricing == true'"
+            },
+            "group_by": {
+              "type": "string",
+              "description": "Field or expression to group rows by for aggregation."
+            },
+            "item_structure": {
+              "type": "object",
+              "description": "Defines how each row is transformed into a JSON object.",
+              "additionalProperties": {
+                "type": "string",
+                "description": "A field value can be a literal or a column reference ($column) or an expression."
+              }
+            },
+            "fields": {
+              "type": "object",
+              "description": "For object transformations, define fields as key-value mappings."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "outputs": {
+      "type": "array",
+      "description": "Defines how to write transformed data to output files.",
+      "items": {
+        "type": "object",
+        "required": ["root", "format", "file"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "A name for this output config."
+          },
+          "description": {
+            "type": "string"
+          },
+          "root": {
+            "type": "string",
+            "description": "Which transformed field (from transformations) to output."
+          },
+          "format": {
+            "type": "string",
+            "enum": ["json", "csv"],
+            "description": "Output file format."
+          },
+          "file": {
+            "type": "string",
+            "description": "Output filename."
+          },
+          "pretty": {
+            "type": "boolean",
+            "description": "If true, pretty-print JSON output."
+          },
+          "columns": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "For CSV outputs, the columns to include."
+          },
+          "split_by": {
+            "type": "string",
+            "description": "Field to split output into multiple files based on its values."
+          },
+          "split_file_pattern": {
+            "type": "string",
+            "description": "Pattern for naming split files. Use {value} as a placeholder."
+          },
+          "post_process": {
+            "type": "array",
+            "description": "Post-processing steps after writing output.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "description": "Type of post-process step (e.g. 'compress', 'upload', 'notify')."
+                },
+                "format": {
+                  "type": "string",
+                  "description": "For compress: 'gzip' or other formats."
+                },
+                "destination": {
+                  "type": "string",
+                  "description": "For upload: specify destination."
+                },
+                "message": {
+                  "type": "string",
+                  "description": "For notify: message to send."
+                },
+                "method": {
+                  "type": "string",
+                  "description": "For notify: e.g. 'webhook'."
+                },
+                "url": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "URL for webhook or upload."
+                }
+              },
+              "additionalProperties": false
+            }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "error_handling": {
+      "type": "object",
+      "description": "Control how errors are handled.",
+      "properties": {
+        "on_missing_column": {
+          "type": "string",
+          "enum": ["error", "warn", "ignore"]
+        },
+        "on_type_mismatch": {
+          "type": "string",
+          "enum": ["error", "warn", "ignore"]
+        },
+        "on_pattern_violation": {
+          "type": "string",
+          "enum": ["error", "warn", "ignore"]
+        },
+        "on_function_failure": {
+          "type": "string",
+          "enum": ["error", "warn", "ignore"]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["inputs", "transformations", "outputs"],
+  "additionalProperties": false
+}
