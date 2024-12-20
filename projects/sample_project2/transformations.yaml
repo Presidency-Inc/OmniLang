@@ -130,7 +130,7 @@ transformations:
     description: "Partner feed for electronics category"
     type: array
     from: "products"
-    filter: "=$category == 'electronics' and is_recent"
+    filter: "=$category == 'electronics' and $release_date >= '2022-01-01'"
     item_structure:
       id: "$product_id"
       color: "=lowercase($color)"
@@ -168,9 +168,9 @@ outputs:
     description: "Partner feed split by color"
     root: "partner_feed"
     format: "json"
-    split_by: "partner_feed.color"
-    split_file_pattern: "partner_feed_{value}.json"
-    pretty: false
+    split_by: "color"
+    file: "partner_feed_{value}.json"
+    pretty: true
     post_process:
       - type: "notify"
         message: "Partner feeds generated"
