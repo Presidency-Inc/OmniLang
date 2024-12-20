@@ -914,6 +914,17 @@ def setup_project_logging(project_path: str) -> logging.Logger:
     return logger
 
 def process_project(project_path: str, parameters: Dict[str, Any] = None):
+    if parameters is None:
+        parameters = {}
+    
+    # Add default parameters if not provided
+    if 'date_cutoff' not in parameters:
+        parameters['date_cutoff'] = '2022-01-01'
+    if 'environment' not in parameters:
+        parameters['environment'] = 'prod'
+    if 'include_pricing' not in parameters:
+        parameters['include_pricing'] = True
+    
     abs_project_path = os.path.abspath(project_path)
     project_name = os.path.basename(abs_project_path)
     input_dir = os.path.join(abs_project_path, "input_data")

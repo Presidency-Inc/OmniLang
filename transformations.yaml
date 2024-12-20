@@ -1,0 +1,12 @@
+  - name: "partner_feed_output"
+    description: "Partner feed split by color"
+    root: "partner_feed"
+    format: "json"
+    split_by: "color"
+    split_file_pattern: "partner_feed_{value}.json"
+    pretty: false
+    post_process:
+      - type: "notify"
+        message: "Partner feeds generated"
+        method: "webhook"
+        url: "https://partner.example.com/notify" 

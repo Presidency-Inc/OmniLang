@@ -1,1 +1,40 @@
-[]
+[
+  {
+    "productId": 4,
+    "dimensions": {
+      "width": 50,
+      "height": 2,
+      "area": 100
+    },
+    "attributes": {
+      "color": "C-YELLOW",
+      "category": "electronics",
+      "description": "Product 4: 50x2 in Yellow",
+      "largeItemFlag": true
+    },
+    "inventory": {
+      "stock": 50,
+      "warehouse_location": "WH_A",
+      "status": "In Stock"
+    }
+  },
+  {
+    "productId": 5,
+    "dimensions": {
+      "width": 8,
+      "height": 8,
+      "area": 64
+    },
+    "attributes": {
+      "color": "C-RED",
+      "category": "electronics",
+      "description": "Product 5: 8x8 in Red",
+      "largeItemFlag": true
+    },
+    "inventory": {
+      "stock": 10,
+      "warehouse_location": "WH_C",
+      "status": "In Stock"
+    }
+  }
+]

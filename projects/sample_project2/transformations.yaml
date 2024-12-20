@@ -2,18 +2,25 @@ omnilang_version: "1.0"
 description: "A comprehensive CSV to JSON transformation language"
 
 parameters:
-  environment: "prod"
-  include_pricing: "true" 
-  date_cutoff: "2022-01-01"
-  category_filter: "electronics"
+  environment:
+    type: "string"
+    default: "prod"
+  include_pricing:
+    type: "boolean"
+    default: true
+  date_cutoff:
+    type: "date"
+    default: "2022-01-01"
+  category_filter:
+    type: "string"
+    optional: true
 
 plugins:
   - "./plugins/custom_functions.py"
 
 macros:
   compute_area: "= $width * $height"
-  # Fix the double $ here:
-  is_recent: "= $release_date >= $date_cutoff"   
+  is_recent: "= $release_date >= $date_cutoff"
   large_item: "=if($width * $height > 50, true, false)"
 
 inputs:
@@ -75,7 +82,7 @@ transformations:
     description: "Enriched product data"
     type: array
     from: "products"
-    filter: "= $width > 0 and $height > 0 and is_recent and (if($category_filter, $category == $category_filter, true))"
+    filter: "= $width > 0 and $height > 0 and $release_date >= '2022-01-01' and $category == 'electronics'"
     item_structure:
       productId: "$product_id"
       dimensions:
