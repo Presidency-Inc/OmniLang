@@ -1,12 +1,11 @@
+#OmniLang CSON
+## CSV-to-JSON Transformation Framework with OmniLang/CSON
+
 Below is a comprehensive README documentation for the project. It covers:
 
 1. How to solve a CSV-to-JSON migration problem with this framework.
 2. The OmniLang/CSON language guide (conceptual overview).
 3. Instructions on managing and running projects, including configuring inputs, transformations, outputs, and using the provided `main.py`.
-
----
-
-# README: CSV-to-JSON Transformation Framework with OmniLang/CSON
 
 ## Overview
 
