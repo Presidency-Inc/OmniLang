@@ -1,5 +1,5 @@
-#OmniLang CSON
-## CSV-to-JSON Transformation Framework with OmniLang/CSON
+# OmniLang CSON
+## CSV-to-JSON Transformation Language & Framework with OmniLang/CSON
 
 Below is a comprehensive README documentation for the project. It covers:
 
