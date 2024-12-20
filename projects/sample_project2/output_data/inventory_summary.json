@@ -22,6 +22,6 @@
       "avgStock": 10.0
     }
   ],
-  "total_stock_all_warehouses": null,
-  "warehouse_count": null
+  "total_stock_all_warehouses": 165,
+  "warehouse_count": 3
 }

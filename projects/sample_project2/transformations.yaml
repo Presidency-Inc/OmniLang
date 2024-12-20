@@ -2,17 +2,18 @@ omnilang_version: "1.0"
 description: "A comprehensive CSV to JSON transformation language"
 
 parameters:
-  environment: "$ENVIRONMENT"        # e.g., 'dev', 'staging', 'prod'
-  include_pricing: "$INCLUDE_PRICING" # true/false to include pricing data
-  date_cutoff: "$DATE_CUTOFF"         # filter out products released before this date
-  category_filter: "$CATEGORY_FILTER" # optional category filter (e.g., 'electronics')
+  environment: "prod"
+  include_pricing: "true" 
+  date_cutoff: "2022-01-01"
+  category_filter: "electronics"
 
 plugins:
-  - "./plugins/custom_functions.py"   # Adds format_color() function
+  - "./plugins/custom_functions.py"
 
 macros:
   compute_area: "= $width * $height"
-  is_recent: "= $release_date >= date_cutoff"
+  # Fix the double $ here:
+  is_recent: "= $release_date >= $date_cutoff"   
   large_item: "=if($width * $height > 50, true, false)"
 
 inputs:
@@ -33,7 +34,6 @@ inputs:
       required_columns: ["product_id", "width", "height", "category"]
       width_min: 1
       height_min: 1
-      # Category should match this pattern
       category_pattern: "^[A-Za-z0-9_-]+$"
 
   - name: "inventory"
@@ -62,7 +62,6 @@ inputs:
       discount_range: [0.0, 1.0]
 
 transformations:
-
   metadata:
     description: "Global metadata about this dataset"
     type: object
@@ -72,15 +71,11 @@ transformations:
       environment: "= $environment"
       formatted_date: "=format_date(now(), '%Y/%m/%d %H:%M:%S')"
 
-  # Enriched products:
-  # - Join inventory and optionally pricing.
-  # - Filter by positive dimensions, recent date, and category pattern already validated.
-  # - Optional category_filter parameter: if set, only include that category.
   products:
     description: "Enriched product data"
     type: array
     from: "products"
-    filter: "= $width > 0 and $height > 0 and is_recent and (if($category_filter, $category == category_filter, true))"
+    filter: "= $width > 0 and $height > 0 and is_recent and (if($category_filter, $category == $category_filter, true))"
     item_structure:
       productId: "$product_id"
       dimensions:
@@ -88,7 +83,7 @@ transformations:
         height: "$height"
         area: "=compute_area()"
       attributes:
-        color: "=format_color($color)"       # Using plugin function
+        color: "=format_color($color)"
         category: "$category"
         description: "=concat('Product ', $product_id, ': ', $width, 'x', $height, ' in ', $color)"
         largeItemFlag: "=large_item"
@@ -106,9 +101,8 @@ transformations:
         discount: "$discount"
         currency: "$currency"
         finalPrice: "= $base_price * (1 - $discount)"
-        discountPercent: "=percent($discount)" 
+        discountPercent: "=percent($discount)"
 
-  # Inventory summary aggregated by warehouse
   inventory_summary:
     description: "Summarized inventory by warehouse"
     type: object
@@ -125,8 +119,6 @@ transformations:
     total_stock_all_warehouses: "=sum(inventory.stock)"
     warehouse_count: "=count_unique(inventory.warehouse_location)"
 
-  # Partner feed:
-  # Only electronics category and recent products
   partner_feed:
     description: "Partner feed for electronics category"
     type: array
@@ -138,7 +130,6 @@ transformations:
       area: "=compute_area()"
       releaseDateFormatted: "=format_date($release_date, '%d-%m-%Y')"
 
-  # A simple product list for CSV export (no filter)
   product_list:
     description: "Basic product list for CSV output"
     type: array
@@ -149,7 +140,6 @@ transformations:
       area: "=compute_area()"
 
 outputs:
-
   - name: "enriched_products_output"
     description: "Full enriched product data"
     root: "products"
